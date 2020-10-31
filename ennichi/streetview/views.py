@@ -64,10 +64,5 @@ def ajax_transition(request):
         'event_hp_url': event_hp_url,
         'event_twitter_url': event_twitter_url,
         'event_youtube_url': event_youtube_url,
-        'quiz_id': quiz_id,
-        'quiz_r': quiz_r,
-        'quiz_theta': quiz_theta,
-        'quiz_image_url': quiz_image_url,
-        'quiz_send_form': quiz_send_form,
     }
     return JsonResponse(d)
