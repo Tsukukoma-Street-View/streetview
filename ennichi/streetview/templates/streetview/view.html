@@ -1,0 +1,358 @@
+{% extends 'streetview/base.html' %}
+{% load static %}
+{% load app %}
+
+{% block content %}
+<script>
+    function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = jQuery.trim(cookies[i]);
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    var csrftoken = getCookie('csrftoken');
+    var prefnl;
+    var predir = 0;
+
+    function csrfSafeMethod(method) {
+        // these HTTP methods do not require CSRF protection
+        return (/^(GET|HEAD|OPTIONS|TRACE)$/.test(method));
+    }
+
+    $.ajaxSetup({
+        beforeSend: function (xhr, settings) {
+            if (!csrfSafeMethod(settings.type) && !this.crossDomain) {
+                xhr.setRequestHeader("X-CSRFToken", csrftoken);
+            }
+        }
+    });
+
+    // https://aframe.io/docs/1.0.0/introduction/interactions-and-controllers.html
+    // https://aframe.io/docs/1.0.0/introduction/writing-a-component.html
+    AFRAME.registerComponent('click-listener', {
+        init: function() {
+            $(this.el).on('touchstart click', function(e) {
+                e.preventDefault();
+
+                var target_id = e.target.id;
+                if(target_id == 'onload-view') {
+                    var scene_id = $('#scene_id').val();
+                    var scene_theta = 0;
+                }
+                else {
+                    var scene_id = $('#scene_id_' + target_id).val();
+                    var scene_theta = $('#scene_theta_' + target_id).val();
+                }
+                
+                $.ajax({
+                    'url': '{% url "streetview:ajax_transition" %}',
+                    'type': 'GET',
+                    'data': {
+                        'id': scene_id,
+                        'theta': scene_theta,
+                    },
+                    'dataType': 'json',
+                    'cache': false,
+                }).done( r => {
+                    
+                    $('#objects').empty();
+                    var default_direction = parseFloat(r.default_direction);
+
+                    ///////////////////////////////////////////////////////////////////////////
+                    ////////////////////////////////画像表示////////////////////////////////////
+                    var img = new Image();
+                    var imgcnt = 0;
+                    img.src = r.scene_image_url;
+                    img.onload = function () {
+                        imgcnt++;
+                        if (imgcnt == 1) {
+                            let promise = new Promise((resolve, reject) => {
+                                resolve('Hello');
+                            })
+                            promise.then(() => {
+                                $("#main-image").attr('opacity', 0);
+                                $("#objects").empty();
+                                $('#objects').attr('rotation', '0 ' + default_direction + ' 0');
+                                $('#main-image').attr('rotation', '0 ' + default_direction + ' 0');
+                            });
+                            promise.then(() => {
+                                return new Promise((resolve, reject) => {
+                                    $("#next-image").attr({ src: prefnl, rotation: '0 ' + predir + ' 0', opacity: 1.00 });
+                                })
+                            });
+                            promise.then(() => {
+                                var angle = Number(r.prev_scene_theta);
+                                var dx = 300.0 * Math.sin((angle) / 180 * Math.PI);
+                                var dz = -300.0 * Math.cos((angle) / 180 * Math.PI);
+
+                                var array1 = [0.00, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.10, 0.12, 0.15, 0.18, 0.22, 0.26, 0.31, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.69, 0.74, 0.78, 0.82, 0.85, 0.88, 0.90, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97, 0.98, 0.99, 0.99, 0.99];
+                                var array2 = [1.00, 0.99, 0.98, 0.97, 0.95, 0.93, 0.91, 0.89, 0.87, 0.84, 0.81, 0.78, 0.75, 0.72, 0.69, 0.66, 0.63, 0.60, 0.56, 0.52, 0.48, 0.44, 0.40, 0.36, 0.32, 0.29, 0.26, 0.23, 0.20, 0.17, 0.14, 0.12, 0.10, 0.08, 0.06, 0.04, 0.02, 0.01, 0.00, 0.00];
+                                for (var i = 1; i <= 40; i++) {
+                                    (function (local) {
+                                        setTimeout(function () {
+                                            console.log(local);
+                                            $('#main-image').attr({ src: r.scene_image_url, opacity: array1[local - 1], position: (array2[local - 1] * dx) + ' 0 ' + (array2[local - 1] * dz) })
+                                        }, 150 + 40 * local);
+                                    }(i));
+                                }
+                            });
+                            promise.then(() => {
+                                prefnl = r.scene_image_url;
+                                predir = default_direction;
+                                setTimeout(() => {
+                                    $("#next-image").attr({ src: r.scene_image_url, rotation: '0 ' + default_direction + ' 0', opacity: 1.00 });
+                                }, 1760);
+                                setTimeout(() => {
+                                    $('#main-image').attr({ src: '{% static "streetview/images/shiro.png" %}', opacity: 0.00, position: '0 0 0' });
+                                }, 1800);
+                                setTimeout(() => {
+                                    object_calls(r, default_direction);
+                                }, 1900);
+                            }).catch(() => {
+                                console.log('Something wrong!');
+                            })
+                        }
+                    }
+                    ///////////////////////////////////////////////////////////////////////////
+                    ///////////////////////////////////////////////////////////////////////////
+
+                    function object_calls(r, default_direction) {
+
+                        for (var i = 0; i < r.relatedscene_id.length; i++) {
+                            var relatedscene_r = parseFloat(r.relatedscene_r[i]);
+                            var relatedscene_theta = parseFloat(r.relatedscene_theta[i]);
+                            var angle = relatedscene_theta + default_direction;
+                            var x = relatedscene_r * Math.sin((angle) / 180 * Math.PI);
+                            var z = -relatedscene_r * Math.cos((angle) / 180 * Math.PI);
+                            var bs = r.relatedscene_button_size;
+
+
+                            $('#objects').append($('<a-entity></a-entity>').attr({
+                                id: 'relatedscene_' + i,
+                                position: x + ' ' + -8 + ' ' + z, 'rotation': '0 ' + -angle + ' 0'
+                            }));
+                            $('#relatedscene_' + i).append(
+                                $('<input>').attr({type: 'hidden', id: 'scene_id_' + i, value: r.relatedscene_id[i],}),
+                                $('<input>').attr({type: 'hidden', id: 'scene_theta_' + i, value: r.relatedscene_theta[i],}),
+                                $('<a-image></a-image>').attr({'click-listener': '', id: i, src:'#forward', rotation:'-90 0 0', position:'0 0 0', scale: bs + ' ' + bs + ' ' + bs})
+                            );
+                        }
+
+                        for (var i = 0; i < r.quiz_r.length; i++) {
+                            var quiz_r = parseFloat(r.quiz_r[i]);
+                            var quiz_theta = parseFloat(r.quiz_theta[i]);
+                            var angle = quiz_theta + default_direction;
+                            var x = quiz_r * Math.sin((angle) / 180 * Math.PI);
+                            var z = -quiz_r * Math.cos((angle) / 180 * Math.PI);
+
+                            $('#objects').append($('<a-entity></a-entity>').attr({
+                                id: 'quiz_' + i,
+                                position: x + ' ' + -5 + ' ' + z, 'rotation': '0 ' + -angle + ' 0'
+                            }));
+                            $('#quiz_' + i).append(
+                                $('<a-image></a-image>').attr({ 'click-listener3': '', id: i, src: '#nazo_icon', rotation: '0 0 0', position: '0 6 0', scale: '2.5 2.5 2.5' }),
+                            );
+
+                            $('#quiz-image').attr('src', r.quiz_image_url[i]);
+                            if (r.quiz_send_form[i] == true) {
+                                $('#quiz').append($('<div></div>').attr({id: 'quiz-form'}));
+                                $('#quiz-form').append(
+                                    $('<input>').attr({id: 'answer-form', type: 'text', class: 'col-4', size: '25', maxlength: '10'}),
+                                    $('<p></p>').attr({id: 'judge-text', style: 'font-size: 1.5rem;', class: 'text-gray col-4'}).text('？？？'),
+                                    $('<button></button>').attr({id: 'answer-btn', class: 'btn btn-primary col-4', onclick: 'checkAnswer()'}).text('答え合わせ'),
+                                    $('<input>').attr({id: 'quiz_id', type: 'hidden', value: r.quiz_id[i]}),
+                                );
+                            }
+                        }
+
+                        for (var i = 0; i < r.event_hp_url.length; i++) {
+                            var event_r = parseFloat(r.event_r[i]);
+                            var event_theta = parseFloat(r.event_theta[i]);
+                            var angle = default_direction + event_theta;
+                            var x = event_r * Math.sin((angle) / 180 * Math.PI);
+                            var z = -event_r * Math.cos((angle) / 180 * Math.PI);
+
+                            $('#objects').append($('<a-entity></a-entity>').attr({
+                                id: 'event_' + i, position: x + ' ' + 0 + ' ' + z, rotation: '0 ' + -angle + ' 0',
+                            }));
+                            $('#event_' + i).append(
+                                $('<input>').attr({type: 'hidden', id: 'event_hp_url_' + i, value: r.event_hp_url[i],}),
+                                $('<input>').attr({type: 'hidden', id: 'event_twitter_url_' + i, value: r.event_twitter_url[i],}),
+                                $('<input>').attr({type: 'hidden', id: 'event_youtube_url_' + i, value: r.event_youtube_url[i],}),
+                                
+                                $('<a-plane></a-plane>').attr({id: i, color: 'white', scale: '9.5 6.5 1'}),
+                                $('<a-image></a-image>').attr({id: 'key-image_' + i, src: r.event_image_url[i], position: '0 0.6 0.5', scale: '9 5 1'}),
+                                r.event_hp_url[i] ? $('<a-image></a-image>').attr({'click-listener2': '', id: 'event_hp_url_' + i, src: '#hp_icon', rotation: '0 0 0', position: '3.5 -2.5 0.5',}) : $('<a-image></a-image>'),
+                                r.event_twitter_url[i] ? $('<a-image></a-image>').attr({'click-listener2': '', id: 'event_twitter_url_' + i, src: '#twitter_icon', rotation: '0 0 0', position: '2.25 -2.5 0.5',}) : $('<a-image></a-image>'),
+                                r.event_youtube_url[i] ? $('<a-image></a-image>').attr({'click-listener2': '', id: 'event_youtube_url_' + i, src: '#youtube_icon', rotation: '0 0 0', position: '1 -2.5 0.5',}) : $('<a-image></a-image>'),
+                            );
+                        }
+
+                        floor = r.scene_id.toString().charAt(1);
+                        if (floor==1) {
+                            if(r.scene_id<1140) $('#map-image').attr('src', '{% static "streetview/images/map-1F-1.png" %}');
+                            else $('#map-image').attr('src', '{% static "streetview/images/map-1F-2.png" %}');
+                        }
+                        else if (floor==2) $('#map-image').attr('src', '{% static "streetview/images/map-2F.png" %}');
+                        else if (floor==3) $('#map-image').attr('src', '{% static "streetview/images/map-3F.png" %}');
+                        
+                        $('#location_name').text(r.scene_name);
+                        
+                        history.replaceState(null, null, '?id=' + r.scene_id);
+                    }
+                });
+            });
+        },
+    });
+
+    AFRAME.registerComponent('click-listener2', {
+        init: function() {
+            this.el.addEventListener('click', function (e) {
+                var target_id = e.target.id;
+                var url = $('#' + target_id).val();
+                window.open(url, '_blank');
+            });
+        },
+    });
+
+    $(window).on('load', function() {
+        var param = {% if request.GET.id %}{{ request.GET.id }}{% else %}1100{% endif %};
+        $('#scene_id').attr('value', param);
+        $('#onload-view').click();
+    });
+</script>
+
+<input id='scene_id' type='hidden' value=''>
+<a-scene vr-mode-ui='enabled: false'>
+    <a-entity click-listener id='onload-view'></a-entity>
+    <a-assets id='assets'>
+        <img id='nazo_icon' src='{% static "streetview/images/nazo.png" %}'>
+        <img id='forward' src='{% static "streetview/images/forward.png" %}'>
+        <img id='hp_icon' src='{% static "streetview/images/global.png" %}'>
+        <img id='twitter_icon' src='{% static "streetview/images/twitter_icon.png" %}'>
+        <img id='youtube_icon' src='{% static "streetview/images/youtube_icon.png" %}'>
+    </a-assets>
+    <a-entity id='scene-contents' rotation='0 0 0'>
+        <a-sky id='next-image' src='' rotation='' opacity='1'></a-sky>
+        <a-sky id='main-image' src='' rotation='' opacity='1', material='depthTest: false'></a-sky>
+        <a-entity id='objects'></a-entity>
+    </a-entity>
+
+    <!--https://github.com/aframevr/aframe/issues/4141-->
+    <a-entity camera look-controls>    
+        <a-entity
+            cursor='rayOrigin: mouse; fuseTimeout: 0'
+            geometry='primitive: ring; radiusInner: 0.02; radiusOuter: 0.03'
+            material='color: black; shader: flat'>
+        </a-entity>
+    </a-entity>
+</a-scene>
+
+<div id='back-home'>
+    <a class='btn btn-light rounded-pill text-primary' href='{% url "streetview:home" %}'><i class="fas fa-lg fa-arrow-left"></i></a>
+</div>
+
+<div id='menu'>
+    <button id='map-btn' type='button' class='btn btn-primary' onclick='showWindow("map");'><i class="fas fa-map-marked-alt"></i></button>
+    <hr class='my-2'>
+    <button id='howtoplay-btn' type='button' class='btn btn-primary' onclick='showWindow("howtoplay");'><i class="fas fa-lg fa-question"></i></button>
+    <hr class='my-2'>
+    <button id='timetable-btn' type='button' class='btn btn-primary' onclick='showWindow("timetable");'><i class="fas fa-stream"></i></button>
+    <input id='nazo-btn' type='hidden' onclick='showWindow("quiz");'>
+    <script>
+        function showWindow(id) {
+            if ($('#' + id)[0].style.display == 'none') {
+                $('#map')[0].style.display = 'none';
+                $('#quiz')[0].style.display = 'none';
+                $('#timetable')[0].style.display = 'none';
+                $('#howtoplay')[0].style.display = 'none';
+                $('#' + id)[0].style.display = 'block';
+                $('#touch-prevention')[0].style.display='block';
+            }
+        }
+        function hideWindow(id) {
+            $('#' + id)[0].style.display = 'none';
+            $('#touch-prevention')[0].style.display='none';
+        }
+    </script>
+</div>
+
+<div id='sub-window' style='text-align:center' class='offset-sm-2 col-sm-8'>
+    <div id='map' style='display:none;'>
+        <button class='btn btn-secondary rounded float-right' onclick='hideWindow("map");'><i class="fas fa-lg fa-times"></i></button>
+        <img id='map-image' class='w-100 h-100' src='#'>
+        <div class='row mx-2 col-12 btn-group' role='group'>
+            <a id='warp' class='col-3 btn btn-light text-dark border-dark' href='{% url "streetview:view" %}?id=2100'>Blue館へ</a>
+            <a id='warp' class='col-3 btn btn-light text-dark border-dark' href='{% url "streetview:view" %}?id=3203'>Red館へ</a>
+            <a id='warp' class='col-3 btn btn-light text-dark border-dark' href='{% url "streetview:view" %}?id=4102'>Orange館へ</a>
+            <a id='warp' class='col-3 btn btn-light text-dark border-dark' href='{% url "streetview:view" %}?id=1143'>校庭へ</a>
+        </div>
+    </div>
+    <div id='quiz' style='display:none;'>
+        <button class='btn btn-secondary rounded float-right' onclick='hideWindow("quiz");'><i class="fas fa-lg fa-times"></i></button>
+        <img id='quiz-image' class='w-100 h-100' src='#'>
+    </div>
+    <div id='howtoplay' style='display:none;'>
+        <button class='btn btn-secondary rounded float-right' onclick='hideWindow("howtoplay");'><i class="fas fa-lg fa-times"></i></button>
+        <img class='w-100 h-100' src='{% static "streetview/images/asobikata.png" %}'>
+    </div>
+    <div id='timetable' style='display:none;'>
+        <button class='btn btn-secondary rounded float-right' onclick='hideWindow("timetable");'><i class="fas fa-lg fa-times"></i></button>
+        <br><br>
+        <div style='background-color:white;' class='container'>
+            <h4 class='text-dark pt-2'>ライブ配信</h4>
+            <div>
+                <h5 class='text-dark'>開演中</h5>
+                <div id='event-table' class='table-responsive'>
+                    <table id='ongoing' class="table table-striped table-sm my-0">
+                        <tr>
+                            <td>団体名</td>
+                            <td>演目名</td>
+                            <td>日時</td>
+                        </tr>
+                        {% for event in live_event_list %}
+                        <tr>
+                            <td>{{ event.parent_event.group_name }}</td>
+                            <td><a href='{{ event.live_url }}' target='_blank'>{{ event.name }}</a></td>
+                            <td>{{ event.start_date|date:'n/j H:i' }} ～ {{ event.end_date|date:'n/j H:i' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+                <hr class='my-1'>
+                <h5 class='text-dark'>次の予定</h5>
+                <div id='event-table' class='table-responsive'>
+                    <table id='next' class="table table-striped table-sm">
+                        <tr>
+                            <td>団体名</td>
+                            <td>演目名</td>
+                            <td>日時</td>
+                        </tr>
+                        {% for next_event in next_live_event_list %}
+                        <tr>
+                            <td>{{ next_event.parent_event.group_name }}</td>
+                            <td><a href='{{ event.live_url }}' target='_blank'>{{ next_event.name }}</a></td>
+                            <td>{{ next_event.start_date|date:'n/j H:i' }} ～ {{ next_event.end_date|date:'n/j H:i' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div id='touch-prevention' style='display: none;'></div>
+
+<div id='location'><p id='location_name' style='1em;background-color: #333;' class='px-1'></p></div>
+<div id='title_logo'><p style='font-size:12px; text-align: center; font-weight:bold; font-family: "Major Mono Display", monospace;' class='text-white'>tsukukoma<br>street view</p></div>
+{% endblock %}

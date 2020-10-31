@@ -1,0 +1,48 @@
+{% extends 'streetview/base.html' %}
+{% load static %}
+{% load app %}
+
+{% block title %}
+筑駒ストリートビュー｜ホーム
+{% endblock %}
+
+{% block content %}
+<div id='background'><div id='dark-box'>
+    <div id='title'>
+        <img class='col-lg-4 col-sm-6 col-8' src='{% static "streetview/images/title_logo.png" %}'><br><br>
+        <p class='text-light' style='font-size:0.9rem'>はじめに<a id='readme-btn' class='text-warning' href='#readme' onclick='showReadme()'>こちら</a>をお読みください</p>
+        <br>
+        <a class='btn btn-outline-light' style='width: 125px;' href='{% url "streetview:view" %}?id=1100' role='button'>
+            <h4>ENTER</h4> <i class='fas fa-street-view fa-lg'></i>
+        </a>
+    </div>
+    <div class='container'>
+        <ul id='nav' style='list-style:none;' class='float-sm-none'>
+            <li id='nav' class='text-white col-6 px-0'>
+                <p style='font-size: 0.8rem'>Made by</p><h5>筑駒縁日班</h5>
+            </li>
+            <li id='line' class='mx-2'><img style='height:50px;' src='{% static "streetview/images/line.png" %}'></li>
+            <li id='nav' class='text-white col-5 px-0'>
+                <p style='font-size: 0.8rem'>Made with</p><h5>Aframe</h5>
+            </li>
+        </ul>
+        <script>
+            function showReadme(){
+                if ($('#readme')[0].style.display == 'none') {
+                    $('#readme')[0].style.display = 'block';
+                    $('#background')[0].style.display = 'none';
+                }
+                else {
+                    $('#readme')[0].style.display = 'none';
+                    $('#background')[0].style.display = 'block';
+                }
+            }
+        </script>
+    </div>
+</div></div>
+<div id='readme' style='display:none;'>
+    <a class='text-dark' style='z-index: 10; right: 20px; position: fixed; top: 12px;' href='#' onclick='showReadme()'><i class="fas fa-2x fa-times"></i></a>
+    {% include 'includes/readme.html' %}
+</div>
+
+{% endblock %}
